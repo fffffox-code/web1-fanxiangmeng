@@ -9,6 +9,14 @@ import com.sky.vo.DishVO;
 import java.util.List;
 
 public interface DishService {
+
+    /**
+     * 菜品起售停售
+     * @param status
+     * @param id
+     */
+    void startOrStop(Integer status, Long id);
+
     /**
      * 新增菜品和对应口味
      * @param dishDTO
@@ -36,6 +44,13 @@ public interface DishService {
      * @return
      */
     DishVO getByIdWithFlavor(Long id);
+
+    /**
+     * 根据分类id查询菜品
+     * @param categoryId
+     * @return
+     */
+    List<Dish> list(Long categoryId);
 
     /**
      * 根据id修改菜品基本信息和对应口味信息

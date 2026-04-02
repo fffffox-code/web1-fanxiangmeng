@@ -11,3 +11,7 @@ sky:
     access-key-id: ${ALIYUN_ACCESS_KEY_ID}
     access-key-secret: ${ALIYUN_ACCESS_KEY_SECRET}
     bucket-name: fxm-java-web-springboot
+  redis:
+    host: localhost
+    port: 6379
+    database: 01
