@@ -50,19 +50,19 @@ public class ShoppingcartServiceImpl implements ShoppingCartService {
             ShoppingCart cart = list.get(0);
             cart.setNumber(cart.getNumber() + 1);//update shopping_cart set number = ? where id = ?
             shoppingCartMapper.updateNumberById(cart);
-        }else{
+        } else {
             //如果不存在，需要插入一条购物车数据
 
             //判断本次添加到购物车的是菜品还是套餐
             Long dishId = shoppingCartDTO.getDishId();
-            if(dishId != null){
-            //本次添加到购物车的是菜品
-            Dish dish = dishMapper.getById(dishId);
-            shoppingCart.setName(dish.getName());
-            shoppingCart.setImage(dish.getImage());
-            shoppingCart.setAmount(dish.getPrice());
+            if (dishId != null) {
+                //本次添加到购物车的是菜品
+                Dish dish = dishMapper.getById(dishId);
+                shoppingCart.setName(dish.getName());
+                shoppingCart.setImage(dish.getImage());
+                shoppingCart.setAmount(dish.getPrice());
 
-            }else {
+            } else {
                 //本次添加到购物车的是套餐
                 Long setmealId = shoppingCartDTO.getSetmealId();
                 Setmeal setmeal = setmealMapper.getById(setmealId);
@@ -76,4 +76,15 @@ public class ShoppingcartServiceImpl implements ShoppingCartService {
             shoppingCartMapper.insert(shoppingCart);
         }
     }
+        public List<ShoppingCart> showShoppingCart(){
+
+            //获取到当前的微信用户id
+            Long userId = BaseContext.getCurrentId();
+            ShoppingCart shoppingCart = ShoppingCart.builder()
+                    .userId(userId)
+                    .build();
+            List<ShoppingCart> list = shoppingCartMapper.list(shoppingCart);
+            return list;
+        }
+
 }
