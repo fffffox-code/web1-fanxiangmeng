@@ -12,4 +12,51 @@
         #{payMethod},#{payStatus},#{amount},#{remark},#{phone},#{address}, #{consignee},#{estimatedDeliveryTime},
     #{deliveryStatus},#{packAmount},#{tablewareNumber},#{tablewareStatus})
 </insert>
+
+    <!-- 根据订单号查询 -->
+    <select id="getByNumber" resultType="com.sky.entity.Orders">
+        select id, number, status, pay_status, order_time, checkout_time,
+               amount, address, pack_amount, pay_method,
+               user_id, address_book_id, remark, phone, consignee,
+               tableware_number, tableware_status
+        from orders
+        where number = #{number}
+    </select>
+
+    <!-- 更新订单（动态更新） -->
+    <update id="update" parameterType="com.sky.entity.Orders">
+        update orders
+        <set>
+            <if test="status != null">status = #{status},</if>
+            <if test="payStatus != null">pay_status = #{payStatus},</if>
+            <if test="checkoutTime != null">checkout_time = #{checkoutTime},</if>
+            <!-- 其他需要更新的字段 -->
+        </set>
+        where id = #{id}
+    </update>
+
+    <select id="pageQuery" resultType="Orders">
+        select * from orders
+        <where>
+            <if test="number != null and number!=''">
+                and number like concat('%',#{number},'%')
+            </if>
+            <if test="phone != null and phone!=''">
+                and phone like concat('%',#{phone},'%')
+            </if>
+            <if test="userId != null">
+                and user_id = #{userId}
+            </if>
+            <if test="status != null">
+                and status = #{status}
+            </if>
+            <if test="beginTime != null">
+                and order_time &gt;= #{beginTime}
+            </if>
+            <if test="endTime != null">
+                and order_time &lt;= #{endTime}
+            </if>
+        </where>
+        order by order_time desc
+    </select>
 </mapper>
