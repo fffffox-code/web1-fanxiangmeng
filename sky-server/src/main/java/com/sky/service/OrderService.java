@@ -17,10 +17,11 @@ public interface OrderService {
     OrderSubmitVO submitOrder(OrdersSubmitDTO ordersSubmitDTO);
 
     /**
-     *模拟支付
-     * @param orderNumber
+     * 模拟支付
+     * @param outTradeNo
+     * @param payMethod
      */
-    void paySuccess(String orderNumber, Integer payMethod);
+    void paySuccess(String outTradeNo, Integer payMethod);
 
 
     /**
@@ -106,4 +107,11 @@ public interface OrderService {
      * @param id
      */
     void complete(Long id);
+
+
+    /**
+     * 客户接单
+     * @param id
+     */
+    void reminder(Long id);
 }

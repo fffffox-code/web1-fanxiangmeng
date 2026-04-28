@@ -24,9 +24,11 @@ import com.sky.result.PageResult;
 import com.sky.service.OrderService;
 import com.sky.utils.HttpClientUtil;
 import com.sky.utils.WeChatPayUtil;
+import com.sky.vo.OrderPaymentVO;
 import com.sky.vo.OrderStatisticsVO;
 import com.sky.vo.OrderSubmitVO;
 import com.sky.vo.OrderVO;
+import com.sky.websocket.WebSocketServer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -64,6 +66,8 @@ public class OrderServiceImpl implements OrderService {
     private ShoppingCartMapper shoppingCartMapper;
     @Autowired
     private WeChatPayUtil weChatPayUtil;
+@Autowired
+    private WebSocketServer webSocketServer;
 
     /**
      * 用户下单
@@ -135,23 +139,49 @@ public class OrderServiceImpl implements OrderService {
 
     /**
      * 模拟支付
-     *
-     * @param orderNumber
-     * @param payMethod
+     * @param ordersPaymentDTO
+     * @return
+     * @throws Exception
      */
+    public OrderPaymentVO payment(OrdersPaymentDTO ordersPaymentDTO) throws Exception {
+        // 模拟支付：不调用微信，直接返回成功
+        OrderPaymentVO vo = new OrderPaymentVO();
+        vo.setNonceStr("mock");
+        vo.setPackageStr("mock");
+        vo.setPaySign("mock");
+        vo.setTimeStamp(String.valueOf(System.currentTimeMillis()));
+        vo.setSignType("MD5");
+        // 注意：这里不执行订单状态更新，只返回模拟数据给前端
+        // 真正更新状态放在 paySuccess 中，由 controller 调用
+        return vo;
+    }
     @Override
-    public void paySuccess(String orderNumber, Integer payMethod) {
-        Orders orders = orderMapper.getByNumber(orderNumber);
-        if (orders == null) {
+    public void paySuccess(String outTradeNo, Integer payMethod) {
+        // 根据订单号查询订单
+        Orders ordersDB = orderMapper.getByNumber(outTradeNo);
+        if (ordersDB == null) {
             throw new OrderBusinessException(MessageConstant.ORDER_NOT_FOUND);
         }
-        orders.setStatus(Orders.PAID);
-        orders.setPayStatus(Orders.PAID);
-        orders.setCheckoutTime(LocalDateTime.now());
-        orders.setPayMethod(payMethod);   // 关键：更新支付方式
-        orderMapper.update(orders);
-    }
 
+        // 更新订单状态：状态改为待接单(2)，支付状态改为已支付(1)，记录结账时间和支付方式
+        Orders orders = Orders.builder()
+                .id(ordersDB.getId())
+                .status(Orders.TO_BE_CONFIRMED)   // 2 待接单
+                .payStatus(Orders.PAID)            // 1 已支付
+                .checkoutTime(LocalDateTime.now())
+                .payMethod(payMethod)              // 1微信 2支付宝
+                .build();
+        orderMapper.update(orders);
+
+        //通过websocket客户浏览器推送消息 type orderId content
+        Map map =new HashMap();
+        map.put("type",1);//1表示来单提醒2表示客户催单
+        map.put("orderId",ordersDB.getId());
+        map.put("content","i号:"+ outTradeNo);
+
+        String json = JSON.toJSONString(map);
+        webSocketServer.sendToAllClient(json);
+    }
 
     /**
      * 用户端订单分页查询
@@ -550,5 +580,20 @@ public class OrderServiceImpl implements OrderService {
             //配送距离超过5000米
             throw new OrderBusinessException("超出配送范围");
         }
+    }
+
+    public void reminder(Long id) {
+        //根据d查询订单
+        Orders ordersDB = orderMapper.getById(id);
+        //校验订单是否存在
+        if (ordersDB == null) {
+            throw new OrderBusinessException(MessageConstant.ORDER_STATUS_ERROR);
+        }
+        Map map = new HashMap();
+        map.put("type", 2);//1表示来单提醒2表示客户催单
+        map.put("orderId", id);
+        map.put("content", "订单号: " + ordersDB.getNumber());
+  //通过websocket问客户端浏览器推送消息
+        webSocketServer.sendToAllClient(JSON.toJSONString(map));
     }
 }

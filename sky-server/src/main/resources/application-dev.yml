@@ -5,7 +5,7 @@ sky:
     port: 3306
     database: sky_take_out
     username: root
-    password: fxm123456
+    password:
   alioss:
     endpoint: oss-cn-shanghai.aliyuncs.com
     access-key-id: ${ALIYUN_ACCESS_KEY_ID}

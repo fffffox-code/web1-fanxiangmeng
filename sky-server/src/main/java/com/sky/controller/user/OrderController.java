@@ -5,6 +5,7 @@ import com.sky.dto.OrdersSubmitDTO;
 import com.sky.result.PageResult;
 import com.sky.result.Result;
 import com.sky.service.OrderService;
+import com.sky.vo.OrderPaymentVO;
 import com.sky.vo.OrderSubmitVO;
 import com.sky.vo.OrderVO;
 import io.swagger.annotations.Api;
@@ -36,14 +37,23 @@ public class OrderController {
 
     /**
      * 模拟支付
-     * @param dto
+     * @param ordersPaymentDTO
      * @return
      */
     @PutMapping("/payment")
-    public Result<String> payment(@RequestBody OrdersPaymentDTO dto) {
-        // dto 中应有 orderNumber 和 payMethod
-        orderService.paySuccess(dto.getOrderNumber(), dto.getPayMethod());
-        return Result.success();
+    @ApiOperation("订单支付（模拟）")
+    public Result<OrderPaymentVO> payment(@RequestBody OrdersPaymentDTO ordersPaymentDTO) {
+        log.info("模拟订单支付：{}", ordersPaymentDTO);
+        // 直接调用支付成功逻辑，传入订单号和支付方式
+        orderService.paySuccess(ordersPaymentDTO.getOrderNumber(), ordersPaymentDTO.getPayMethod());
+        // 返回一个空的 VO（前端不需要具体支付参数）
+        OrderPaymentVO vo = new OrderPaymentVO();
+        vo.setNonceStr("mock");
+        vo.setPackageStr("mock");
+        vo.setPaySign("mock");
+        vo.setTimeStamp(String.valueOf(System.currentTimeMillis()));
+        vo.setSignType("MD5");
+        return Result.success(vo);
     }
 
     /**
@@ -101,4 +111,17 @@ public class OrderController {
         return Result.success();
     }
 
+
+    /**
+     * 客户接单
+     * @param id
+     * @return
+     */
+    @GetMapping("/reminder/{id}")
+    @ApiOperation("客户催单")
+    public Result reminder(@PathVariable("id") Long id) {
+
+        orderService.reminder(id);
+        return Result.success();
+    }
     }
