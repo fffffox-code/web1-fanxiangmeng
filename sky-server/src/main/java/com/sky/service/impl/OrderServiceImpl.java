@@ -530,10 +530,25 @@ public class OrderServiceImpl implements OrderService {
 
         //获取店铺的经纬度坐标
         String shopCoordinate = HttpClientUtil.doGet("https://api.map.baidu.com/geocoding/v3", map);
+        log.info("百度地图API原始返回数据: {}", shopCoordinate);
+        log.info("百度地图API原始返回数据: {}", shopCoordinate);
 
         JSONObject jsonObject = JSON.parseObject(shopCoordinate);
-        if(!jsonObject.getString("status").equals("0")){
-            throw new OrderBusinessException("店铺地址解析失败");
+        String status = jsonObject.getString("status");
+        if (!"0".equals(status)) {
+            String message = jsonObject.getString("message");
+            // 根据不同的status，给出更有针对性的提示
+            if ("201".equals(status)) {
+                throw new OrderBusinessException("地图服务未启用，请联系管理员检查AK配置");
+            } else if ("210".equals(status)) {
+                throw new OrderBusinessException("地图AK的IP白名单限制，请联系管理员");
+            } else if ("211".equals(status)) {
+                throw new OrderBusinessException("地图AK的SN校验失败，请联系管理员");
+            } else if ("240".equals(status)) {
+                throw new OrderBusinessException("地图服务接口已升级，请联系管理员更新接口");
+            } else {
+                throw new OrderBusinessException("店铺地址解析失败：" + message);
+            }
         }
 
         //数据解析
