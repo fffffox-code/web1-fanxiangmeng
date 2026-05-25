@@ -6,6 +6,7 @@ import com.sky.dto.OrdersPageQueryDTO;
 import com.sky.entity.Orders;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Select;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -96,4 +97,8 @@ List<Orders> getByStatusAndOrderTimelT(Integer status, LocalDateTime orderTime);
      * @return
      */
     List<GoodsSalesDTO>getSalesTop10(LocalDateTime begin, LocalDateTime end);
-}
+
+
+    // 查询指定时间范围内已取消的订单（状态为已取消，且取消时间在区间内）
+    @Select("SELECT * FROM orders WHERE status = 5 AND cancel_time BETWEEN #{start} AND #{end}")
+    List<Orders> getCancelledOrdersBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);}

@@ -16,8 +16,10 @@ import com.sky.exception.PasswordErrorException;
 import com.sky.mapper.EmployeeMapper;
 import com.sky.result.PageResult;
 import com.sky.service.EmployeeService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
@@ -25,10 +27,13 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
+@Slf4j
 public class EmployeeServiceImpl implements EmployeeService {
 
     @Autowired
     private EmployeeMapper employeeMapper;
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;  // 注入 Redis
 
     /**
      * 员工登录
@@ -116,12 +121,22 @@ public class EmployeeServiceImpl implements EmployeeService {
      * @param id
      */
     public void startOrStop(Integer status, Long id) {
-        Employee employee=Employee.builder()
+        Employee employee = Employee.builder()
                 .id(id)
                 .status(status)
-
                 .build();
         employeeMapper.update(employee);
+
+        // 如果禁用账号，直接吊销该用户的 refreshToken
+        if (status == StatusConstant.DISABLE && id != null) {
+            String userRefreshKey = "user_refresh:" + id;
+            String oldRefreshToken = stringRedisTemplate.opsForValue().get(userRefreshKey);
+            if (oldRefreshToken != null) {
+                stringRedisTemplate.delete("refresh_token:" + oldRefreshToken);
+                stringRedisTemplate.delete(userRefreshKey);
+                log.info("员工账号 {} 被禁用，已强制下线", id);
+            }
+        }
     }
 
     /**

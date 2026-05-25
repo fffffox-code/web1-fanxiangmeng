@@ -1,6 +1,7 @@
 package com.sky.controller.admin;
 
 import com.sky.constant.JwtClaimsConstant;
+import com.sky.context.BaseContext;
 import com.sky.dto.EmployeeDTO;
 import com.sky.dto.EmployeeLoginDTO;
 import com.sky.dto.EmployeePageQueryDTO;
@@ -11,19 +12,19 @@ import com.sky.result.Result;
 import com.sky.service.EmployeeService;
 import com.sky.utils.JwtUtil;
 import com.sky.vo.EmployeeLoginVO;
+import com.sky.vo.LoginResponseVO;
 import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.*;
-import io.swagger.annotations.ApiOperation;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
-/**
- * 员工管理
- */
-@Api(tags ="员工管理模块")
+@Api(tags = "员工管理模块")
 @RestController
 @RequestMapping("/admin/employee")
 @Slf4j
@@ -33,44 +34,69 @@ public class EmployeeController {
     private EmployeeService employeeService;
     @Autowired
     private JwtProperties jwtProperties;
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;  // 注入 Redis
 
     /**
-     * 登录
-     *
-     * @param employeeLoginDTO
-     * @return
+     * 登录（双Token版本）
      */
     @PostMapping("/login")
-    public Result<EmployeeLoginVO> login(@RequestBody EmployeeLoginDTO employeeLoginDTO) {
+    public Result<LoginResponseVO> login(@RequestBody EmployeeLoginDTO employeeLoginDTO) {
         log.info("员工登录：{}", employeeLoginDTO);
-
         Employee employee = employeeService.login(employeeLoginDTO);
 
-        //登录成功后，生成jwt令牌
+        // 1. 生成 accessToken
         Map<String, Object> claims = new HashMap<>();
         claims.put(JwtClaimsConstant.EMP_ID, employee.getId());
-        String token = JwtUtil.createJWT(
+        String accessToken = JwtUtil.createJWT(
                 jwtProperties.getAdminSecretKey(),
                 jwtProperties.getAdminTtl(),
                 claims);
 
-        EmployeeLoginVO employeeLoginVO = EmployeeLoginVO.builder()
+        // 2. 生成 refreshToken
+        String refreshToken = JwtUtil.createJWT(
+                jwtProperties.getAdminRefreshSecretKey(),
+                jwtProperties.getAdminRefreshTtl(),
+                claims);
+
+        // 3. 将 refreshToken 存入 Redis（用于校验和吊销）
+        String refreshKey = "refresh_token:" + refreshToken;
+        stringRedisTemplate.opsForValue().set(refreshKey,
+                employee.getId().toString(),
+                jwtProperties.getAdminRefreshTtl(),
+                TimeUnit.MILLISECONDS);
+
+        // 4. 维护 userId -> refreshToken 的映射（方便通过用户吊销）
+        String userRefreshKey = "user_refresh:" + employee.getId();
+        stringRedisTemplate.opsForValue().set(userRefreshKey,
+                refreshToken,
+                jwtProperties.getAdminRefreshTtl(),
+                TimeUnit.MILLISECONDS);
+
+        // 5. 封装返回
+        LoginResponseVO response = LoginResponseVO.builder()
                 .id(employee.getId())
                 .userName(employee.getUsername())
                 .name(employee.getName())
-                .token(token)
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
                 .build();
 
-        return Result.success(employeeLoginVO);
+        return Result.success(response);
     }
 
     /**
-     * 退出
-     *
-     * @return
+     * 退出登录（吊销 refreshToken）
      */
     @PostMapping("/logout")
-    public Result<String> logout() {
+    public Result<String> logout(@RequestHeader(value = "refreshToken", required = false) String refreshToken) {
+        Long empId = BaseContext.getCurrentId();
+        if (empId != null && refreshToken != null) {
+            // 删除 refreshToken 及其映射
+            stringRedisTemplate.delete("refresh_token:" + refreshToken);
+            stringRedisTemplate.delete("user_refresh:" + empId);
+            log.info("员工 {} 登出，已吊销 refreshToken", empId);
+        }
         return Result.success();
     }
 

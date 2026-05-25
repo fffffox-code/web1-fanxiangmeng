@@ -1,20 +1,32 @@
 package com.sky.task;
 
+import com.alibaba.fastjson.JSON;
+import com.sky.entity.AbnormalOrderReport;
 import com.sky.entity.Orders;
+import com.sky.mapper.AbnormalOrderReportMapper;
 import com.sky.mapper.OrderMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Component
 @Slf4j
 @EnableScheduling
 public class OrderTask {
     private final OrderMapper orderMapper;
+    @Autowired
+    private AbnormalOrderReportMapper abnormalOrderReportMapper;
 
     public OrderTask(OrderMapper orderMapper) {
         this.orderMapper = orderMapper;
@@ -52,5 +64,72 @@ public class OrderTask {
                 orderMapper.update(orders);
             }
         }
+    }
+    // 每天凌晨2点执行异常订单分析（避开业务高峰）
+    @Scheduled(cron = "0 0 2 * * ?")
+    public void analyzeAbnormalOrders() {
+        log.info("开始分析异常订单，日期：{}", LocalDate.now().minusDays(1));
+        LocalDate reportDate = LocalDate.now().minusDays(1);
+        LocalDateTime start = reportDate.atStartOfDay();
+        LocalDateTime end = reportDate.atTime(23, 59, 59);
+
+        // 1. 查询当天所有已取消的订单
+        List<Orders> cancelledOrders = orderMapper.getCancelledOrdersBetween(start, end);
+        if (cancelledOrders == null || cancelledOrders.isEmpty()) {
+            log.info("当日无异常订单，跳过报告生成");
+            return;
+        }
+
+        // 2. 统计各类数据
+        int totalCancelled = cancelledOrders.size();
+        int totalRejected = (int) cancelledOrders.stream()
+                .filter(o -> "商家拒单".equals(o.getCancelReason()))
+                .count();
+        int totalTimeout = (int) cancelledOrders.stream()
+                .filter(o -> o.getCancelReason() != null && o.getCancelReason().contains("超时"))
+                .count();
+
+        // 平均取消时长（分钟）
+        double avgMinutes = cancelledOrders.stream()
+                .filter(o -> o.getCancelTime() != null && o.getOrderTime() != null)
+                .mapToLong(o -> java.time.Duration.between(o.getOrderTime(), o.getCancelTime()).toMinutes())
+                .average()
+                .orElse(0);
+        int avgCancelTime = (int) Math.round(avgMinutes);
+
+        // 统计取消原因TOP1
+        Map<String, Long> reasonCount = cancelledOrders.stream()
+                .map(Orders::getCancelReason)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
+        String topReason = reasonCount.entrySet().stream()
+                .max(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey)
+                .orElse("无");
+
+        // 3. 生成详细JSON
+        List<Map<String, Object>> details = cancelledOrders.stream()
+                .map(o -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("orderNumber", o.getNumber());
+                    m.put("cancelReason", o.getCancelReason());
+                    m.put("cancelTime", o.getCancelTime() != null ? o.getCancelTime().toString() : "");
+                    m.put("amount", o.getAmount());
+                    return m;
+                }).collect(Collectors.toList());
+        String detailJson = JSON.toJSONString(details);
+
+        // 4. 保存报告
+        AbnormalOrderReport report = new AbnormalOrderReport();
+        report.setReportDate(reportDate);
+        report.setTotalCancelled(totalCancelled);
+        report.setTotalRejected(totalRejected);
+        report.setTotalTimeout(totalTimeout);
+        report.setAvgCancelTime(avgCancelTime);
+        report.setTopCancelReason(topReason);
+        report.setDetailJson(detailJson);
+
+        abnormalOrderReportMapper.insert(report);
+        log.info("异常订单分析完成，共{}条取消订单，已保存报告", totalCancelled);
     }
 }
