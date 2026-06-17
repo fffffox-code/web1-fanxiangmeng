@@ -55,11 +55,11 @@ public class AiService {
                 .model(aiConfig.getModel())
                 .messages(Arrays.asList(userMsg))
                 .resultFormat(GenerationParam.ResultFormat.MESSAGE)
-                .maxTokens(aiConfig.getMaxTokens());
+                .maxTokens(aiConfig.getMaxTokens());   // 限制输出长度
 
         // 如果配置了 temperature，转换为 Float
         if (aiConfig.getTemperature() != null) {
-            builder.temperature(aiConfig.getTemperature().floatValue());
+            builder.temperature(aiConfig.getTemperature().floatValue());     // 控制随机性
         }
 
         GenerationParam param = builder.build();

@@ -4,6 +4,7 @@ import com.sky.entity.DishFlavor;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Select;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
@@ -24,9 +25,9 @@ public interface DishFlavorMapper {
 
     /**
      *根据菜品id集合批量删除关联的口味数据
-     * @param dishIds
+     * @param ids
      */
-    void deleteByDishIds(List<Long> dishIds);
+    void deleteByDishIds(@Param("ids") List<Long> ids);
 
     /**
      * 根据id查询菜品和对应的口味数据

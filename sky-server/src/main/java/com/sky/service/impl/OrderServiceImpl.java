@@ -66,7 +66,7 @@ public class OrderServiceImpl implements OrderService {
     private ShoppingCartMapper shoppingCartMapper;
     @Autowired
     private WeChatPayUtil weChatPayUtil;
-@Autowired
+    @Autowired
     private WebSocketServer webSocketServer;
 
     /**
@@ -155,6 +155,7 @@ public class OrderServiceImpl implements OrderService {
         // 真正更新状态放在 paySuccess 中，由 controller 调用
         return vo;
     }
+
     @Override
     public void paySuccess(String outTradeNo, Integer payMethod) {
         // 根据订单号查询订单
@@ -174,7 +175,7 @@ public class OrderServiceImpl implements OrderService {
         orderMapper.update(orders);
 
         //通过websocket客户浏览器推送消息 type orderId content
-        Map map =new HashMap();
+        Map map = new HashMap();
         map.put("type",1);//1表示来单提醒2表示客户催单
         map.put("orderId",ordersDB.getId());
         map.put("content","i号:"+ outTradeNo);
@@ -266,17 +267,17 @@ public class OrderServiceImpl implements OrderService {
         orders.setId(ordersDB.getId());
 
         // 订单处于待接单状态下取消，需要进行退款
-        if (ordersDB.getStatus().equals(Orders.TO_BE_CONFIRMED)) {
-            //调用微信支付退款接口
-            weChatPayUtil.refund(
-                    ordersDB.getNumber(), //商户订单号
-                    ordersDB.getNumber(), //商户退款单号
-                    new BigDecimal(0.01),//退款金额，单位 元
-                    new BigDecimal(0.01));//原订单金额
-
-            //支付状态修改为 退款
-            orders.setPayStatus(Orders.REFUND);
-        }
+//        if (ordersDB.getStatus().equals(Orders.TO_BE_CONFIRMED)) {
+//            //调用微信支付退款接口
+//            weChatPayUtil.refund(
+//                    ordersDB.getNumber(), //商户订单号
+//                    ordersDB.getNumber(), //商户退款单号
+//                    new BigDecimal(0.01),//退款金额，单位 元
+//                    new BigDecimal(0.01));//原订单金额
+//
+//            //支付状态修改为 退款
+//            orders.setPayStatus(Orders.REFUND);
+//        }
 
         // 更新订单状态、取消原因、取消时间
         orders.setStatus(Orders.CANCELLED);
@@ -406,7 +407,7 @@ public class OrderServiceImpl implements OrderService {
 
 
     /**
-     * 拒单
+     * 拒单（已移除退款调用）
      *
      * @param ordersRejectionDTO
      */
@@ -419,19 +420,13 @@ public class OrderServiceImpl implements OrderService {
             throw new OrderBusinessException(MessageConstant.ORDER_STATUS_ERROR);
         }
 
-        //支付状态
-        Integer payStatus = ordersDB.getPayStatus();
-        if (payStatus == Orders.PAID) {
-            //用户已支付，需要退款
-            String refund = weChatPayUtil.refund(
-                    ordersDB.getNumber(),
-                    ordersDB.getNumber(),
-                    new BigDecimal(0.01),
-                    new BigDecimal(0.01));
-            log.info("申请退款：{}", refund);
-        }
+        // 支付状态检查（已注释退款调用）
+        // Integer payStatus = ordersDB.getPayStatus();
+        // if (payStatus == Orders.PAID) {
+        //     weChatPayUtil.refund(...);
+        // }
 
-        // 拒单需要退款，根据订单id更新订单状态、拒单原因、取消时间
+        // 拒单：更新订单状态、拒单原因、取消时间
         Orders orders = new Orders();
         orders.setId(ordersDB.getId());
         orders.setStatus(Orders.CANCELLED);
@@ -443,7 +438,7 @@ public class OrderServiceImpl implements OrderService {
 
 
     /**
-     * 取消订单
+     * 取消订单（已移除退款调用）
      *
      * @param ordersCancelDTO
      */
@@ -451,24 +446,19 @@ public class OrderServiceImpl implements OrderService {
         // 根据id查询订单
         Orders ordersDB = orderMapper.getById(ordersCancelDTO.getId());
 
-        //支付状态
-        Integer payStatus = ordersDB.getPayStatus();
-        if (payStatus == 1) {
-            //用户已支付，需要退款
-            String refund = weChatPayUtil.refund(
-                    ordersDB.getNumber(),
-                    ordersDB.getNumber(),
-                    new BigDecimal(0.01),
-                    new BigDecimal(0.01));
-            log.info("申请退款：{}", refund);
-        }
+        // 支付状态检查（已注释退款调用）
+        // Integer payStatus = ordersDB.getPayStatus();
+        // if (payStatus == 1) {
+        //     weChatPayUtil.refund(...);
+        // }
 
-        // 管理端取消订单需要退款，根据订单id更新订单状态、取消原因、取消时间
+        // 管理端取消订单：更新订单状态、取消原因、取消时间
         Orders orders = new Orders();
         orders.setId(ordersCancelDTO.getId());
         orders.setStatus(Orders.CANCELLED);
         orders.setCancelReason(ordersCancelDTO.getCancelReason());
         orders.setCancelTime(LocalDateTime.now());
+
         orderMapper.update(orders);
     }
 
@@ -608,7 +598,7 @@ public class OrderServiceImpl implements OrderService {
         map.put("type", 2);//1表示来单提醒2表示客户催单
         map.put("orderId", id);
         map.put("content", "订单号: " + ordersDB.getNumber());
-  //通过websocket问客户端浏览器推送消息
+        //通过websocket问客户端浏览器推送消息
         webSocketServer.sendToAllClient(JSON.toJSONString(map));
     }
 }

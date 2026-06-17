@@ -100,5 +100,16 @@ List<Orders> getByStatusAndOrderTimelT(Integer status, LocalDateTime orderTime);
 
 
     // 查询指定时间范围内已取消的订单（状态为已取消，且取消时间在区间内）
-    @Select("SELECT * FROM orders WHERE status = 5 AND cancel_time BETWEEN #{start} AND #{end}")
-    List<Orders> getCancelledOrdersBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);}
+    @Select("SELECT * FROM orders WHERE status = 6 AND cancel_time BETWEEN #{start} AND #{end}")
+    List<Orders> getCancelledOrdersBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    /**
+     * 获取指定时间范围内的订单ID列表
+     * @param start 开始时间
+     * @param end 结束时间
+     * @return 订单ID列表
+     */
+    @Select("SELECT id FROM orders WHERE order_time BETWEEN #{start} AND #{end}")
+    List<Long> getOrderIdsByTimeRange(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+}

@@ -13,10 +13,13 @@ import com.sky.service.EmployeeService;
 import com.sky.utils.JwtUtil;
 import com.sky.vo.EmployeeLoginVO;
 import com.sky.vo.LoginResponseVO;
+import io.jsonwebtoken.Claims;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,6 +39,9 @@ public class EmployeeController {
     private JwtProperties jwtProperties;
     @Autowired
     private StringRedisTemplate stringRedisTemplate;  // 注入 Redis
+    @Qualifier("redisTemplate")
+    @Autowired
+    private RedisTemplate redisTemplate;
 
     /**
      * 登录（双Token版本）
@@ -59,14 +65,14 @@ public class EmployeeController {
                 jwtProperties.getAdminRefreshTtl(),
                 claims);
 
-        // 3. 将 refreshToken 存入 Redis（用于校验和吊销）
+        // 3. 将 refreshToken 存入 Redis（关键：使用 stringRedisTemplate）
         String refreshKey = "refresh_token:" + refreshToken;
         stringRedisTemplate.opsForValue().set(refreshKey,
                 employee.getId().toString(),
                 jwtProperties.getAdminRefreshTtl(),
                 TimeUnit.MILLISECONDS);
 
-        // 4. 维护 userId -> refreshToken 的映射（方便通过用户吊销）
+        // 4. 维护 userId -> refreshToken 的映射（方便后续吊销）
         String userRefreshKey = "user_refresh:" + employee.getId();
         stringRedisTemplate.opsForValue().set(userRefreshKey,
                 refreshToken,
@@ -84,7 +90,6 @@ public class EmployeeController {
 
         return Result.success(response);
     }
-
     /**
      * 退出登录（吊销 refreshToken）
      */
@@ -165,5 +170,38 @@ public class EmployeeController {
         log.info("编辑员工信息：{}",employeeDTO);
         employeeService.update(employeeDTO);
         return Result.success();
+    }
+
+    @PostMapping("/refresh")
+    @ApiOperation("刷新AccessToken")
+    public Result<Map<String, String>> refresh(@RequestHeader("Refresh-Token") String refreshToken) {
+        log.info("刷新token: {}", refreshToken);
+        try {
+            // 1. 检查 Redis 中是否存在该 refreshToken
+            String refreshKey = "refresh_token:" + refreshToken;
+            if (Boolean.FALSE.equals(stringRedisTemplate.hasKey(refreshKey))) {
+                return Result.error("Refresh token 无效或已过期");
+            }
+
+            // 2. 解析 refreshToken 获取员工ID
+            Claims claims = JwtUtil.parseJWT(jwtProperties.getAdminRefreshSecretKey(), refreshToken);
+            Long empId = Long.valueOf(claims.get(JwtClaimsConstant.EMP_ID).toString());
+
+            // 3. 生成新的 accessToken
+            Map<String, Object> newClaims = new HashMap<>();
+            newClaims.put(JwtClaimsConstant.EMP_ID, empId);
+            String newAccessToken = JwtUtil.createJWT(
+                    jwtProperties.getAdminSecretKey(),
+                    jwtProperties.getAdminTtl(),
+                    newClaims);
+
+            // 使用 HashMap 替代 Map.of (Java 8 兼容)
+            Map<String, String> result = new HashMap<>();
+            result.put("accessToken", newAccessToken);
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("刷新token失败", e);
+            return Result.error("Refresh token 验证失败");
+        }
     }
 }
